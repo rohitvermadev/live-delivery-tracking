@@ -1,12 +1,16 @@
 import express from "express";
 import redis from "./redis.js";
 import http from "http"
+import locationRoutes from "./routes/location.routes.js"
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json())
+
+//Routes
+app.use("/api/location", locationRoutes);
 
 app.get("/", (req, res) => {
     res.json({message: "Live Delivery Tracking Server is running"});

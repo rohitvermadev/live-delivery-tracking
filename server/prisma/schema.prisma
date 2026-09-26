@@ -1,0 +1,25 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model OrderLocation {
+  orderId   String   @id @map("order_id")
+  driverId  String   @map("driver_id")
+  lat       Float
+  lng       Float
+  ts        BigInt
+  seq       BigInt
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("order_locations")
+}
