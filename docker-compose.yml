@@ -3,3 +3,12 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+      
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: tracking
+      POSTGRES_PASSWORD: tracking
+      POSTGRES_DB: tracking
+    ports:
+      - "5433:5432"
