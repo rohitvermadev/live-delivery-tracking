@@ -1,6 +1,6 @@
 # Location write measurements
 
-Naive path: `POST /api/location` upserts one Postgres row per order.
+`POST /api/location` writes one latest point per order. `STORE=postgres` upserts a row. `STORE=redis` overwrites one key.
 
 ## Setup
 
@@ -10,19 +10,21 @@ Naive path: `POST /api/location` upserts one Postgres row per order.
 | Load shape | Virtual users loop as fast as the server answers. No fixed rate. |
 | Duration | 20 seconds |
 | Orders | 1,000 ids (`ord_0` … `ord_999`) |
-| Write | One upsert per request. A repeated order overwrites its row. |
-| Machine | k6, Node, and Postgres share one Windows laptop. Postgres runs in Docker. |
+| Write | One upsert, or one Redis `SET`, per request. A repeated order overwrites its row or key. |
+| Machine | k6, Node, Postgres, and Redis share one Windows laptop. Postgres and Redis run in Docker. |
 
 Finished requests are responses k6 received. In every run below, all of them were HTTP 200.
 
 ## Comparison
 
-| Virtual users | Pool | Finished / sec | p(95) | Failures |
-| --- | --- | --- | --- | --- |
-| 20 | 10 (default) | 724 | 43 ms | 0 |
-| 50 | 10 | 733 | 96 ms | 0 |
-| 100 | 10 | 696 | 193 ms | 0 |
-| 100 | 50 | 725 | 259 ms | 0 |
+| Store | Virtual users | Pool | Finished / sec | p(95) | Failures |
+| --- | --- | --- | --- | --- | --- |
+| Postgres | 20 | 10 (default) | 724 | 43 ms | 0 |
+| Postgres | 50 | 10 | 733 | 96 ms | 0 |
+| Postgres | 100 | 10 | 696 | 193 ms | 0 |
+| Postgres | 100 | 50 | 725 | 259 ms | 0 |
+| Redis | 100 | — | 1,989 | 71 ms | 0 |
+| Redis | 200 | — | 1,912 | 165 ms | 0 |
 
 Twenty seconds at about 700 finished requests per second is about 14,000 responses. The totals stayed in that band because the rate did not rise. More users increased wait time, not throughput.
 
@@ -42,6 +44,38 @@ That run finished 654 requests/sec with p(95) at 214 ms. It was slightly slower 
 
 On this machine the bottleneck is Postgres commit durability. The Docker disk confirms about 700 transaction syncs per second. More concurrency does not raise that number.
 
+## Redis, 100 virtual users
+
+Same script. Server started with `STORE=redis`. Each request is one `SET` on `location:order:{orderId}` with a 45 second TTL. No Postgres write on this path.
+
+| | |
+| --- | --- |
+| Requests/sec | 1,989 |
+| Total requests | 39,835 |
+| Median | 48 ms |
+| p(95) | 71 ms |
+| Max | 179 ms |
+| Failures | 0 |
+
+Against Postgres at the same concurrency, Redis finished about 2.7 times as many requests (725/sec to 1,989/sec) and p(95) fell from 259 ms to 71 ms. The key does not wait for a disk sync on every ping.
+
+One hundred users at about 50 ms each can complete about 2,000 requests/sec (`100 / 0.05`). That run matched the formula, so it did not prove a ceiling.
+
+## Redis, 200 virtual users
+
+Same script and `STORE=redis`.
+
+| | |
+| --- | --- |
+| Requests/sec | 1,912 |
+| Total requests | 38,466 |
+| Median | 96 ms |
+| p(95) | 165 ms |
+| Max | 662 ms |
+| Failures | 0 |
+
+The rate did not climb (1,989/sec to 1,912/sec). p(95) rose from 71 ms to 165 ms. Same shape as the Postgres ceiling: more users waited, and finished writes stayed flat. On this laptop the Redis path tops out near **1,900 requests/sec**. Postgres topped out near **700**. Which process was busy (Node, Redis, or k6) was not recorded.
+
 ## Next
 
-Write the latest point to Redis with the same k6 script and 100 virtual users. Keep this Postgres path so the two rates can be compared. Redis does not `fsync` on every update.
+Optional: during another 200-user Redis run, note whether `node`, `k6`, or the Redis container is the busy process. That names the 1,900/sec cap. The Postgres and Redis comparison itself is done.
