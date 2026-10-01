@@ -1,12 +1,16 @@
+import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import redis from "./redis.js";
 import http from "http"
 import locationRoutes from "./routes/location.routes.js"
+import { attachSocket } from "./socket.js";
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
+app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json())
 
 //Routes
@@ -49,6 +53,8 @@ app.get("/health", async (req, res) => {
     });
   }
 });
+
+attachSocket(server);
 
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
